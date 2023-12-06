@@ -38,8 +38,9 @@ sudo systemctl enable mariadb
 # 安装 Node.js
 sudo apt install nodejs -y
 sudo apt install npm -y
-sudo apt install yarn -y
+npm install -g yarn
 yarn global add pm2
+yarn global add nodemon
 
 # 安装 MongoDB
 curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/mongodb-server-7.0.gpg

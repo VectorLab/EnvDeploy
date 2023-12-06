@@ -47,6 +47,24 @@ chmod +x install.sh html.sh node.sh php.sh
 ### 数据库密码设置
 运行安装脚本后，应该为MariaDB生成一个密码，并在安装完成后为MongoDB配置密码。
 
+```javascript
+use admin
+db.createUser({
+  user: "root",
+  pwd: "[管理员密码]",
+  roles: [ { role: "userAdminAnyDatabase", db: "admin" } ]
+})
+db.auth("root", "[管理员密码]")
+use [数据库名]
+db.createUser({
+    user: "[数据库用户名]",
+    pwd: "[管理员密码]",
+    roles: [
+        { role: "readWrite", db: "[数据库名]" }
+    ]
+})
+```
+
 ## 配置脚本选择
 根据矢量实验室的技术栈需求，选择合适的配置脚本进行网站的初始设置。这里有三种类型的脚本可供选择：
 
