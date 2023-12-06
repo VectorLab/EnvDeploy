@@ -70,6 +70,10 @@ server {
 
   index index.html index.htm index.php;
   root /websites/$domain;
+  
+  if (!-e $request_filename) {
+    rewrite ^(.*)$ /index.php$1 last;
+  }
 
   location ~ .*\.php(\/.*)*$ {
     include snippets/fastcgi-php.conf;

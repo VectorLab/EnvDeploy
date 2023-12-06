@@ -29,9 +29,9 @@ chmod +x tcp.sh
 ./tcp.sh
 ```
 
-2. 在脚本菜单中，选择 **1 (BBR)**。大多数情况下，BBR已经默认开启，可以跳过此步骤。
-3. 接下来，选择 **4 (开启BBR)**，然后选择 **10 (优化)**。
-4. 同意重启以应用更改。
+2. 在脚本菜单中，选择 **1 (BBR)**。大多数情况下，BBR已经默认开启，可以跳过此步骤
+3. 接下来，选择 **4 (开启BBR)**，然后选择 **10 (优化)**
+4. 同意重启以应用更改
 
 ## 安装Git和安装脚本运行
 为了运行必要的脚本，需要安装Git并克隆相应的仓库：
@@ -45,7 +45,7 @@ chmod +x install.sh html.sh node.sh php.sh
 ```
 
 ### 数据库密码设置
-运行安装脚本后，应该为MariaDB生成一个密码，并在安装完成后为MongoDB配置密码。
+运行安装脚本后，应该为MariaDB生成一个密码，并在安装完成后为MongoDB配置密码：
 
 ```javascript
 use admin
@@ -58,12 +58,14 @@ db.auth("root", "[管理员密码]")
 use [数据库名]
 db.createUser({
     user: "[数据库用户名]",
-    pwd: "[管理员密码]",
+    pwd: "[数据库密码]",
     roles: [
         { role: "readWrite", db: "[数据库名]" }
     ]
 })
 ```
+
+确保将 `[管理员密码]` ， `[数据库用户名]` 和`[数据库密码]` 替换为需要的内容
 
 ## 配置脚本选择
 根据矢量实验室的技术栈需求，选择合适的配置脚本进行网站的初始设置。这里有三种类型的脚本可供选择：
@@ -83,30 +85,32 @@ db.createUser({
 ./php.sh
 ```
 
-在执行上述任一命令后，输入你的域名，并等待acme.sh完成Let's Encrypt证书的签发。
+在执行上述任一命令后，输入项目的域名，并等待acme.sh完成Let's Encrypt证书的签发
 
 ### 网站文件管理
-所有网站文件均存放在 `/websites` 目录中。根据你的域名，你可以在此目录下上传或修改网站文件。
+所有网站文件均存放在 `/websites` 目录中。根据你的域名，你可以在此目录下上传或修改网站文件
 
 ### Nginx 配置
-Nginx的配置文件位于 `/etc/nginx/sites-available/` 目录。按需修改配置文件，并重载Nginx以使更改生效。请注意，`/etc/nginx/sites-enabled/` 目录包含的是符号链接，不需要直接修改。
+Nginx的配置文件位于 `/etc/nginx/sites-available/` 目录。按需修改配置文件，并重载Nginx以使更改生效。请注意，`/etc/nginx/sites-enabled/` 目录包含的是符号链接，不需要直接修改
 
 ### Tyepcho 伪静态配置文件
-找到对应域名的nginx配置文件，加上
+鉴于PHP环境多为typecho程序，已默认为php.sh脚本加上：
 
 ```bash
-  location / {
-    try_files $uri $uri/ /index.php?$args;
+  if (!-e $request_filename) {
+    rewrite ^(.*)$ /index.php$1 last;
   }
 ```
 
-注意矢量实验室中的TAB键是两个空格，不应当破坏美观度
+如不需要，则可以删除
 
 ### Node.js 应用的守护进程
-如果你部署了Node.js应用，需要使用pm2来守护进程。使用以下命令启动你的Node.js应用：
+如果部署了Node.js应用，需要使用pm2来守护进程。使用以下命令启动Node.js应用：
 
 ```bash
 cd /websites/[域名] && pm2 start "yarn run start" --name [网站应用名字]
 ```
 
-确保将 `[域名]` 和 `[网站应用名字]` 替换为实际的域名和应用名。此外，确保在源码文件中选择正确的端口号，并确保它与Nginx配置中的端口号相匹配。
+确保将 `[域名]` 和 `[网站应用名字]` 替换为实际的域名和应用名
+
+注意生成的端口默认是3000，如运行多个Node.js应用，则需要自己调整不同的端口，更改nginx配置文件时注意矢量实验室中的TAB键是两个空格，不应破坏美观度
