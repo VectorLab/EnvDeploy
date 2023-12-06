@@ -61,8 +61,8 @@ server {
   ssl_stapling_verify on;
   server_name $domain www.$domain;
 
-  if ($ssl_protocol = "") { return 301 https://$host$request_uri; }
-  if ($host != $domain) {  return 301 $scheme://$domain$request_uri;  }
+  if (\$ssl_protocol = "") { return 301 https://$host\$request_uri; }
+  if (\$host != $domain) {  return 301 \$scheme://$domain\$request_uri;  }
 
   index index.html index.htm;
   root /websites/$domain;
