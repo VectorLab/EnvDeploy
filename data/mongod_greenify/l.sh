@@ -30,7 +30,7 @@ echo "invalid stable version"
 echo ${install_ver}
 exit 1
 fi
-install_system=$(lsb_release -is)
+install_system=$(lsb_release -is | tail -n 1 )
 install_arch=""
 case $(uname -m) in
 	x86_64 | amd64)
@@ -55,7 +55,11 @@ case ${install_arch} in
 		exit 1
 		;;
 esac
-
+install_system_ver=$(lsb_release -sr | tail -n 1 )
+if [[ "Debian" == ${install_system} ]] && [[ "12" == ${install_system_ver} ]]; then
+install_system="Ubuntu"
+install_system_ver="22.04"
+fi
 install_platform=$(echo ${dl_page_ver_json} | 
 	jq -r .\"${install_ver}\".sortedPlatforms[] | 
 while read -r ln; do
@@ -66,7 +70,6 @@ while read -r ln; do
 	echo ${ln}
 done )
 if [[ 1 -lt $(echo "${install_platform}" | wc -l ) ]]; then
-install_system_ver=$(lsb_release -sr )
 install_platform=$(echo "${install_platform}" | while read -r ln; do
 if [[ -z $(echo ${ln} | grep -iF ${install_system_ver} ) ]]; then
 	continue
