@@ -71,7 +71,7 @@ server {
   index index.html index.htm index.php;
   root /websites/$domain;
   
-  if (!-e $request_filename) {
+  if (!-e \$request_filename) {
     rewrite ^(.*)$ /index.php$1 last;
   }
 
