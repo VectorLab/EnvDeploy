@@ -3,18 +3,36 @@
 echo "请输入域名:"
 read domain
 
-sudo mkdir -p /websites/$domain
-sudo mkdir -p /etc/letsencrypt/live/$domain # 创建证书目录
+# 检查域名是一级域名还是二级域名
+if [[ $domain =~ \. ]]; then
+  primary_domain=${domain#*.}
+  subdomain=${domain%%.*}
+  if [[ $primary_domain =~ \. ]]; then
+    # 如果 primary_domain 仍然包含一个点，它就是二级域名
+    full_domain=$domain
+    is_subdomain=true
+  else
+    full_domain=$domain
+    is_subdomain=false
+  fi
+else
+  echo "请输入有效的域名"
+  exit 1
+fi
+
+# 创建目录
+sudo mkdir -p /websites/$full_domain
+sudo mkdir -p /etc/letsencrypt/live/$full_domain # 创建证书目录
 
 # 创建 PHP 的临时 Nginx 配置文件，仅监听 80 端口
-cat <<EOF | sudo tee /etc/nginx/sites-available/$domain.conf
+cat <<EOF | sudo tee /etc/nginx/sites-available/$full_domain.conf
 server {
   listen 80;
   listen [::]:80;
-  server_name $domain www.$domain;
+  server_name $full_domain;
 
   location /.well-known/acme-challenge/ {
-    root /websites/$domain;
+    root /websites/$full_domain;
   }
 
   location / {
@@ -23,7 +41,7 @@ server {
 }
 EOF
 
-sudo ln -sf /etc/nginx/sites-available/$domain.conf /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/$full_domain.conf /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 
@@ -31,12 +49,16 @@ sudo systemctl reload nginx
 ~/.acme.sh/acme.sh --register-account -m support@nebulo.cn
 
 # 使用 ACME.sh 获取 Let's Encrypt 证书
-~/.acme.sh/acme.sh --issue -d $domain -d www.$domain --webroot /websites/$domain
+if [ "$is_subdomain" = true ]; then
+  ~/.acme.sh/acme.sh --issue -d $full_domain --webroot /websites/$full_domain
+else
+  ~/.acme.sh/acme.sh --issue -d $domain -d www.$domain --webroot /websites/$domain
+fi
 
 # 安装证书到指定目录
-~/.acme.sh/acme.sh --install-cert -d $domain \
-    --key-file       /etc/letsencrypt/live/$domain/privkey.pem  \
-    --fullchain-file /etc/letsencrypt/live/$domain/fullchain.pem \
+~/.acme.sh/acme.sh --install-cert -d $full_domain \
+    --key-file       /etc/letsencrypt/live/$full_domain/privkey.pem  \
+    --fullchain-file /etc/letsencrypt/live/$full_domain/fullchain.pem \
     --reloadcmd     "sudo systemctl reload nginx"
 
 # 自动识别安装的 PHP FPM 版本
@@ -44,15 +66,21 @@ PHP_VERSION=$(php -r 'echo PHP_VERSION;' | grep --only-matching --perl-regexp "^
 PHP_FPM_SOCK="unix:/var/run/php/php${PHP_VERSION}-fpm.sock"
 
 # 更新 Nginx 配置以包括 SSL 以及 PHP 相关设置
-cat <<EOF | sudo tee /etc/nginx/sites-available/$domain.conf
+if [ "$is_subdomain" = true ]; then
+  server_name_directive=$full_domain
+else
+  server_name_directive="$domain www.$domain"
+fi
+
+cat <<EOF | sudo tee /etc/nginx/sites-available/$full_domain.conf
 server {
   listen 80;
   listen [::]:80;
   listen 443 ssl http2;
   listen [::]:443 ssl http2;
 
-  ssl_certificate /etc/letsencrypt/live/$domain/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/$domain/privkey.pem;
+  ssl_certificate /etc/letsencrypt/live/$full_domain/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/$full_domain/privkey.pem;
   ssl_protocols TLSv1.2 TLSv1.3;
   ssl_ecdh_curve X25519:prime256v1:secp384r1:secp521r1;
   ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256';
@@ -63,14 +91,14 @@ server {
   add_header Strict-Transport-Security max-age=15768000;
   ssl_stapling on;
   ssl_stapling_verify on;
-  server_name $domain www.$domain;
+  server_name $server_name_directive;
 
   if (\$ssl_protocol = "") { return 301 https://\$host\$request_uri; }
-  if (\$host != $domain) {  return 301 \$scheme://$domain\$request_uri;  }
+  if (\$host != $full_domain) {  return 301 \$scheme://$full_domain\$request_uri;  }
 
   index index.html index.htm index.php;
-  root /websites/$domain;
-  
+  root /websites/$full_domain;
+
   if (!-e \$request_filename) {
     rewrite ^(.*)$ /index.php$1 last;
   }
