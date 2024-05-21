@@ -25,11 +25,17 @@ sudo mkdir -p /websites/$full_domain
 sudo mkdir -p /etc/letsencrypt/live/$full_domain # 创建证书目录
 
 # 创建 PHP 的临时 Nginx 配置文件，仅监听 80 端口
+if [ "$is_subdomain" = true ]; then
+  server_name_directive=$full_domain
+else
+  server_name_directive="$domain www.$domain"
+fi
+
 cat <<EOF | sudo tee /etc/nginx/sites-available/$full_domain.conf
 server {
   listen 80;
   listen [::]:80;
-  server_name $full_domain;
+  server_name $server_name_directive;
 
   location /.well-known/acme-challenge/ {
     root /websites/$full_domain;
@@ -66,12 +72,6 @@ PHP_VERSION=$(php -r 'echo PHP_VERSION;' | grep --only-matching --perl-regexp "^
 PHP_FPM_SOCK="unix:/var/run/php/php${PHP_VERSION}-fpm.sock"
 
 # 更新 Nginx 配置以包括 SSL 以及 PHP 相关设置
-if [ "$is_subdomain" = true ]; then
-  server_name_directive=$full_domain
-else
-  server_name_directive="$domain www.$domain"
-fi
-
 cat <<EOF | sudo tee /etc/nginx/sites-available/$full_domain.conf
 server {
   listen 80;
