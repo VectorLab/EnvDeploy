@@ -52,3 +52,10 @@ sudo systemctl enable mongod
 
 # 安装 ACME.sh
 curl https://get.acme.sh | sh
+
+# 确保 Apache 未安装或已被移除
+sudo apt remove apache2 -y
+sudo systemctl disable apache2
+sudo systemctl stop apache2
+
+
