@@ -1,21 +1,16 @@
 #!/bin/bash
 
-# 设置严格模式
 set -euo pipefail
 
-# 定义配置目录
 readonly NGINX_AVAILABLE="/etc/nginx/sites-available"
-readonly NGINX_ENABLED="/etc/nginx/sites-enabled" 
+readonly NGINX_ENABLED="/etc/nginx/sites-enabled"
 readonly WEBSITES_DIR="/websites"
 readonly CERT_DIR="/cloudflare"
 
-# 检查依赖
 check_dependencies() {
-  echo "正在检查依赖..."
-  local dependencies=(nginx openssl php php-fpm)
+  local dependencies=(nginx openssl php-fpm)
   for dep in "${dependencies[@]}"; do
     if ! command -v "$dep" >/dev/null 2>&1; then
-      echo "正在安装 $dep..."
       if ! sudo apt-get update && sudo apt-get install -y "$dep"; then
         echo "错误: 安装 $dep 失败"
         exit 1
@@ -24,7 +19,6 @@ check_dependencies() {
   done
 }
 
-# 验证域名格式
 validate_domain() {
   local domain="$1"
   local domain_regex="^([a-zA-Z0-9][a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}$"
@@ -35,7 +29,6 @@ validate_domain() {
   return 0
 }
 
-# 验证证书内容
 validate_certificate() {
   local cert="$1"
   local temp_file=$(mktemp)
@@ -51,7 +44,6 @@ validate_certificate() {
   return 0
 }
 
-# 创建必要的目录
 create_directories() {
   local domain="$1"
   local dirs=("$WEBSITES_DIR/$domain" "$CERT_DIR/$domain")
@@ -64,7 +56,6 @@ create_directories() {
   done
 }
 
-# 保存证书文件
 save_certificates() {
   local domain="$1"
   local cert="$2"
@@ -77,13 +68,17 @@ save_certificates() {
   sudo chmod 600 "$CERT_DIR/$domain/privkey.pem"
 }
 
-# 生成 Nginx 配置
+detect_php_version() {
+  local php_version
+  php_version=$(php -r 'echo PHP_VERSION;' | grep -oP "^\d+\.\d+")
+  echo "/var/run/php/php${php_version}-fpm.sock"
+}
+
 generate_nginx_config() {
   local domain="$1"
   local is_subdomain="$2"
-  local php_version="$3"
+  local php_sock="$3"
   local server_name_directive
-  local php_fpm_sock="unix:/var/run/php/php${php_version}-fpm.sock"
   
   if [ "$is_subdomain" = true ]; then
     server_name_directive="$domain"
@@ -93,77 +88,77 @@ generate_nginx_config() {
   
   cat <<EOF | sudo tee "$NGINX_AVAILABLE/$domain.conf" > /dev/null
 server {
-  listen 80;
-  listen [::]:80;
-  listen 443 ssl http2;
-  listen [::]:443 ssl http2;
-  
-  ssl_certificate $CERT_DIR/$domain/fullchain.pem;
-  ssl_certificate_key $CERT_DIR/$domain/privkey.pem;
-  
-  ssl_protocols TLSv1.2 TLSv1.3;
-  ssl_ecdh_curve X25519:prime256v1:secp384r1:secp521r1;
-  ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256';
-  ssl_prefer_server_ciphers on;
-  ssl_session_timeout 10m;
-  ssl_session_cache shared:SSL:10m;
-  ssl_session_tickets off;
-  ssl_buffer_size 2k;
-  
-  add_header Strict-Transport-Security max-age=15768000;
-  add_header X-Frame-Options "SAMEORIGIN";
-  add_header X-XSS-Protection "1; mode=block";
-  add_header X-Content-Type-Options "nosniff";
+    listen 80;
+    listen [::]:80;
+    server_name $server_name_directive;
+    return 301 https://\$server_name\$request_uri;
+}
 
-  gzip on;
-  gzip_vary on;
-  gzip_min_length 1k;
-  gzip_comp_level 6;
-  gzip_types text/plain text/css text/xml application/json application/javascript application/x-javascript application/xml;
-  gzip_disable "MSIE [1-6]\\.";
-  
-  server_name $server_name_directive;
-  
-  if (\$host != $domain) { return 301 \$scheme://$domain\$request_uri; }
-  
-  index index.html index.htm index.php;
-  root $WEBSITES_DIR/$domain;
-
-  if (!-e \$request_filename) {
-    rewrite ^(.*)$ /index.php\$1 last;
-  }
-
-  location ~ .*\.php(\/.*)*$ {
-    include snippets/fastcgi-php.conf;
-    fastcgi_pass $php_fpm_sock;
-  }
-  
-  location ~ .*\\.(gif|jpg|jpeg|png|bmp|swf|flv|mp4|ico)$ {
-    expires 30d;
-    access_log off;
-  }
-  
-  location ~ .*\\.(js|css)?$ {
-    expires 7d;
-    access_log off;
-  }
-  
-  location ~ /(\\\.user\\.ini|\\.ht|\\.git|\\.svn|\\.project|LICENSE|README\\.md) {
-    deny all;
-  }
-
-  location /.well-known {
-    allow all;
-  }
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    
+    ssl_certificate $CERT_DIR/$domain/fullchain.pem;
+    ssl_certificate_key $CERT_DIR/$domain/privkey.pem;
+    
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ecdh_curve X25519:prime256v1:secp384r1:secp521r1;
+    ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256';
+    ssl_prefer_server_ciphers on;
+    ssl_session_timeout 10m;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_tickets off;
+    ssl_buffer_size 2k;
+    
+    add_header Strict-Transport-Security max-age=15768000;
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header X-Content-Type-Options "nosniff";
+    
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1k;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css text/xml application/json application/javascript application/x-javascript application/xml;
+    gzip_disable "MSIE [1-6]\\.";
+    
+    server_name $server_name_directive;
+    
+    if (\$host != $domain) { return 301 \$scheme://$domain\$request_uri; }
+    
+    index index.php index.html index.htm;
+    root $WEBSITES_DIR/$domain;
+    
+    location ~ \.php$ {
+        try_files \$uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass unix:$php_sock;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        fastcgi_param PATH_INFO \$fastcgi_path_info;
+    }
+    
+    location ~ .*\\.(gif|jpg|jpeg|png|bmp|swf|flv|mp4|ico)$ {
+        expires 30d;
+        access_log off;
+    }
+    
+    location ~ .*\\.(js|css)?$ {
+        expires 7d;
+        access_log off;
+    }
+    
+    location ~ /(\\\.user\\.ini|\\.ht|\\.git|\\.svn|\\.project|LICENSE|README\\.md) {
+        deny all;
+    }
 }
 EOF
 
   sudo ln -sf "$NGINX_AVAILABLE/$domain.conf" "$NGINX_ENABLED/"
 }
 
-# 验证并重载 Nginx 配置
 reload_nginx() {
-  echo "测试 Nginx 配置..."
   if ! sudo nginx -t; then
     echo "Nginx 配置测试失败"
     return 1
@@ -177,12 +172,6 @@ reload_nginx() {
   return 0
 }
 
-# 获取 PHP 版本
-get_php_version() {
-  php -r 'echo PHP_VERSION;' | grep --only-matching --perl-regexp "^\d+\.\d+"
-}
-
-# 主程序
 main() {
   check_dependencies
   
@@ -205,10 +194,6 @@ main() {
   echo "（从 -----BEGIN PRIVATE KEY----- 开始粘贴，粘贴完成后按 Ctrl+D）"
   key_content=$(cat)
   
-  # 获取 PHP 版本
-  php_version=$(get_php_version)
-  
-  # 处理域名
   local primary_domain
   local subdomain
   local full_domain
@@ -232,9 +217,12 @@ main() {
   if ! create_directories "$full_domain"; then
     exit 1
   fi
+
+  local php_sock
+  php_sock=$(detect_php_version)
   
   save_certificates "$full_domain" "$cert_content" "$key_content"
-  generate_nginx_config "$full_domain" "$is_subdomain" "$php_version"
+  generate_nginx_config "$full_domain" "$is_subdomain" "$php_sock"
   
   if ! reload_nginx; then
     exit 1
@@ -243,8 +231,7 @@ main() {
   echo "配置完成！"
   echo "网站目录: $WEBSITES_DIR/$full_domain"
   echo "证书位置: $CERT_DIR/$full_domain"
-  echo "PHP 版本: $php_version"
+  echo "PHP-FPM Socket: $php_sock"
 }
 
-# 执行主程序
 main
