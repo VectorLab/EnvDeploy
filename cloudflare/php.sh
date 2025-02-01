@@ -98,9 +98,12 @@ server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     
+    server_name $server_name_directive;
+    root $WEBSITES_DIR/$domain;
+    index index.php index.html index.htm;
+    
     ssl_certificate $CERT_DIR/$domain/fullchain.pem;
     ssl_certificate_key $CERT_DIR/$domain/privkey.pem;
-    
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ecdh_curve X25519:prime256v1:secp384r1:secp521r1;
     ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256';
@@ -122,12 +125,13 @@ server {
     gzip_types text/plain text/css text/xml application/json application/javascript application/x-javascript application/xml;
     gzip_disable "MSIE [1-6]\\.";
     
-    server_name $server_name_directive;
+    if (\$host != $domain) {
+        return 301 \$scheme://$domain\$request_uri;
+    }
     
-    if (\$host != $domain) { return 301 \$scheme://$domain\$request_uri; }
-    
-    index index.php index.html index.htm;
-    root $WEBSITES_DIR/$domain;
+    location / {
+        try_files \$uri \$uri/ /index.php\$is_args\$args;
+    }
     
     location ~ \.php$ {
         try_files \$uri =404;
