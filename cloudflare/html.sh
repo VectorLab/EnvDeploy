@@ -80,12 +80,6 @@ generate_nginx_config() {
   fi
   
   cat <<EOF | sudo tee "$NGINX_AVAILABLE/$domain.conf" > /dev/null
-server {
-    listen 80;
-    listen [::]:80;
-    server_name $server_name_directive;
-    return 301 https://\$server_name\$request_uri;
-}
 
 server {
     listen 443 ssl http2;
@@ -94,9 +88,7 @@ server {
     ssl_certificate $CERT_DIR/$domain/fullchain.pem;
     ssl_certificate_key $CERT_DIR/$domain/privkey.pem;
     
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ecdh_curve X25519:prime256v1:secp384r1:secp521r1;
-    ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256';
+    ssl_protocols TLSv1.3;
     ssl_prefer_server_ciphers on;
     ssl_session_timeout 10m;
     ssl_session_cache shared:SSL:10m;

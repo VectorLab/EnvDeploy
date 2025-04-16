@@ -74,16 +74,12 @@ PHP_FPM_SOCK="unix:/var/run/php/php${PHP_VERSION}-fpm.sock"
 # 更新 Nginx 配置以包括 SSL 以及 PHP 相关设置
 cat <<EOF | sudo tee /etc/nginx/sites-available/$full_domain.conf
 server {
-  listen 80;
-  listen [::]:80;
   listen 443 ssl http2;
   listen [::]:443 ssl http2;
 
   ssl_certificate /etc/letsencrypt/live/$full_domain/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/$full_domain/privkey.pem;
-  ssl_protocols TLSv1.2 TLSv1.3;
-  ssl_ecdh_curve X25519:prime256v1:secp384r1:secp521r1;
-  ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256';
+  ssl_protocols TLSv1.3;
   ssl_prefer_server_ciphers on;
   ssl_session_timeout 10m;
   ssl_session_cache shared:SSL:10m;

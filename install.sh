@@ -9,8 +9,16 @@ apt update -y && apt upgrade -y && apt install sudo unzip wget curl gnupg screen
 
 # 安装 Nginx
 sudo apt install nginx -y
-sudo systemctl restart nginx
+
+if [[ -f /etc/nginx/sites-available/default ]] && [[ "" == $(sudo cat /etc/nginx/sites-available/default | grep -F 'return 301 https://$server_name$request_uri;' ) ]]; then
+echo "try to apply nginx redirect patch"
+sudo cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default.original.backup
+sudo git apply --include=/etc/nginx/sites-available/default ./data/nginx_default_redirect.patch
+echo "done"
+fi
+
 sudo systemctl enable nginx
+sudo systemctl restart nginx
 
 # 安装 PHP
 sudo apt install php php-fpm php-mysql php-mbstring -y
