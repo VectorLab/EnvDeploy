@@ -89,8 +89,9 @@ generate_nginx_config() {
   cat <<EOF | sudo tee "$NGINX_AVAILABLE/$domain.conf" > /dev/null
 
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
     
     server_name $server_name_directive;
     root $WEBSITES_DIR/$domain;

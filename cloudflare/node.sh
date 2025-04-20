@@ -92,8 +92,9 @@ generate_nginx_config() {
   cat <<EOF | sudo tee "$NGINX_AVAILABLE/$domain.conf" > /dev/null
 
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
     
     ssl_certificate $CERT_DIR/$domain/fullchain.pem;
     ssl_certificate_key $CERT_DIR/$domain/privkey.pem;

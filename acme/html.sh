@@ -70,8 +70,9 @@ fi
 # 更新 Nginx 配置以包括 SSL 以及其他相关设置
 cat <<EOF | sudo tee /etc/nginx/sites-available/$full_domain.conf
 server {
-  listen 443 ssl http2;
-  listen [::]:443 ssl http2;
+  listen 443 ssl;
+  listen [::]:443 ssl;
+  http2 on;
 
   ssl_certificate /etc/letsencrypt/live/$full_domain/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/$full_domain/privkey.pem;
