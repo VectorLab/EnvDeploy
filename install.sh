@@ -1,102 +1,61 @@
 #!/bin/bash
 
-# 提示实验委员输入 MariaDB root 密码
-read -s -p "请输入 MariaDB root 用户的密码: " root_password
-echo
-read -r -N1 -p "是否尝试设置强制跳转https [Yy/N(默认)]: " HAS_REDIRECT_HTTPS
-echo
-read -r -N1 -p "是否安装acme.sh [Nn/Y(默认)]: " HAS_ACMESH
+set -e
+
+sudo systemctl stop apache2 2>/dev/null || true
+sudo systemctl disable apache2 2>/dev/null || true
+sudo apt remove apache2 -y 2>/dev/null || true
+
+sudo rm -f /etc/apt/sources.list.d/nginx.list
+sudo rm -f /usr/share/keyrings/nginx-archive-keyring.gpg
+sudo rm -f /etc/apt/preferences.d/99nginx
+
+sudo apt update -y
+sudo apt install -y sudo unzip wget curl gnupg screen git rsync build-essential python3 cron lsb-release
 
 ENV_SYS_DISTID=$(lsb_release -is | tail -n 1)
-
-# 确保 Apache 未安装或已被移除
-sudo systemctl stop apache2
-sudo systemctl disable apache2
-sudo apt remove apache2 -y
-
-# 安装 MongoDB
-#curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/mongodb-server-7.0.gpg
-#echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+ENV_SYS_CODENAME=$(lsb_release -cs | tail -n 1)
 
 case $ENV_SYS_DISTID in
 "Ubuntu")
-# 安装 MongoDB https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/#std-label-install-mdb-community-ubuntu
-curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg --dearmor
-echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs | tail -n 1)/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
-# 安装 Nginx https://nginx.org/en/linux_packages.html
-curl https://nginx.org/keys/nginx_signing.key | gpg --dearmor | sudo tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
-gpg --dry-run --quiet --no-keyring --import --import-options import-show /usr/share/keyrings/nginx-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/ubuntu `lsb_release -cs` nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
+curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor | sudo tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/ubuntu ${ENV_SYS_CODENAME} nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
 echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
 ;;
 "Debian")
-# 安装 MongoDB https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-debian/#std-label-install-mdb-community-debian
-curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg --dearmor
-echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] http://repo.mongodb.org/apt/debian bookworm/mongodb-org/8.0 main" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
-# 安装 Nginx https://nginx.org/en/linux_packages.html
-curl https://nginx.org/keys/nginx_signing.key | gpg --dearmor | sudo tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
-gpg --dry-run --quiet --no-keyring --import --import-options import-show /usr/share/keyrings/nginx-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/debian `lsb_release -cs` nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
+curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor | sudo tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/debian ${ENV_SYS_CODENAME} nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
 echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
 ;;
 *)
-read -r -N1 -p "当前系统暂不支持自动安装nginx,按任意键继续或CTRL-C结束 " unused
+echo "Warning: Unsupported distro, using default nginx package"
 ;;
 esac
 
-# 更新系统包并安装必要工具
-sudo apt update -y && sudo apt dist-upgrade -y && sudo apt install sudo unzip wget curl gnupg screen git -y
-
-# 安装 Nginx
-sudo apt install nginx -y
-
-if [[ "y" == ${HAS_REDIRECT_HTTPS,,} ]] && [[ -f /etc/nginx/sites-available/default ]] && [[ "" == $(sudo cat /etc/nginx/sites-available/default | grep -F 'return 301 https://$server_name$request_uri;' ) ]]; then
-echo "try to apply nginx redirect patch"
-sudo cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default.original.backup
-sudo git apply --include=/etc/nginx/sites-available/default ./data/nginx_default_redirect.patch
-echo "done"
-fi
+sudo apt update -y && sudo apt dist-upgrade -y
+sudo apt install -y nginx
 
 sudo systemctl enable nginx
 sudo systemctl restart nginx
 
-# 安装 PHP
-sudo apt install php php-fpm php-mysql php-mbstring -y
-PHP_VERSION=$(php -r 'echo PHP_VERSION;' | grep --only-matching --perl-regexp "^\\d+\\.\\d+")
-PHP_FPM_SERVICE="php${PHP_VERSION}-fpm"
-sudo systemctl restart ${PHP_FPM_SERVICE}
-sudo systemctl enable ${PHP_FPM_SERVICE}
+curl -fsSL https://bun.sh/install | bash
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
 
-# 安装 MariaDB
-sudo apt install mariadb-server -y
-
-# MariaDB 安全配置自动化
-sudo mysql -u root <<-EOF
-SET PASSWORD FOR 'root'@'localhost' = PASSWORD('$root_password');
-DELETE FROM mysql.user WHERE User='';
-DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-DROP DATABASE IF EXISTS test;
-DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
-FLUSH PRIVILEGES;
-EOF
-
-sudo systemctl restart mariadb
-sudo systemctl enable mariadb
-
-# 安装 Node.js
-sudo apt install nodejs -y
-sudo apt install npm -y
-npm install -g yarn
-yarn global add pm2
-yarn global add nodemon
-
-# 安装 MongoDB
-sudo apt update
-sudo apt install -y mongodb-org
-sudo systemctl start mongod
-sudo systemctl enable mongod
-
-if [[ "n" != ${HAS_ACMESH,,} ]]; then
-# 安装 ACME.sh
-curl https://get.acme.sh | sh
+if ! grep -q 'BUN_INSTALL' ~/.bashrc 2>/dev/null; then
+  echo '' >> ~/.bashrc
+  echo 'export BUN_INSTALL="$HOME/.bun"' >> ~/.bashrc
+  echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bashrc
 fi
+
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs
+
+npm install -g pm2
+pm2 startup
+
+curl https://get.acme.sh | sh -s email=admin@example.com --force
+
+echo ""
+echo "Installation complete!"
+echo "Installed: git, screen, rsync, nginx, bun, node (LTS), npm, pm2, acme.sh, build-essential, python3"
