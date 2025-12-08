@@ -8,22 +8,26 @@ readonly WEBSITES_DIR="/websites"
 readonly CERT_DIR="/cloudflare"
 
 check_dependencies() {
-  local dependencies=(nginx openssl)
-  for dep in "${dependencies[@]}"; do
+  local missing=()
+
+  for dep in nginx openssl; do
     if ! command -v "$dep" >/dev/null 2>&1; then
-      if ! sudo apt-get update && sudo apt-get install -y "$dep"; then
-        echo "错误: 安装 $dep 失败"
-        exit 1
-      fi
+      missing+=("$dep")
     fi
   done
+
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo "Error: Missing dependencies: ${missing[*]}"
+    echo "Please run install.sh first or install manually"
+    exit 1
+  fi
 }
 
 validate_domain() {
   local domain="$1"
   local domain_regex="^([a-zA-Z0-9][a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}$"
   if [[ ! $domain =~ $domain_regex ]]; then
-    echo "错误：无效的域名格式"
+    echo "Error: Invalid domain format"
     return 1
   fi
   return 0
@@ -36,7 +40,7 @@ validate_certificate() {
 
   if ! openssl x509 -in "$temp_file" -noout 2>/dev/null; then
     rm "$temp_file"
-    echo "错误：无效的证书格式"
+    echo "Error: Invalid certificate format"
     return 1
   fi
 
@@ -50,7 +54,7 @@ create_directories() {
 
   for dir in "${dirs[@]}"; do
     if ! sudo mkdir -p "$dir"; then
-      echo "错误：创建目录 $dir 失败"
+      echo "Error: Failed to create directory $dir"
       return 1
     fi
   done
@@ -96,38 +100,58 @@ server {
   root $WEBSITES_DIR/$domain;
   index index.html index.htm;
 
+  server_tokens off;
+
   ssl_certificate $CERT_DIR/$domain/fullchain.pem;
   ssl_certificate_key $CERT_DIR/$domain/privkey.pem;
   ssl_protocols TLSv1.3;
-  ssl_prefer_server_ciphers on;
-  ssl_session_timeout 10m;
+  ssl_prefer_server_ciphers off;
+  ssl_session_timeout 1d;
   ssl_session_cache shared:SSL:10m;
   ssl_session_tickets off;
-  ssl_buffer_size 2k;
+  ssl_buffer_size 4k;
 
-  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
   add_header X-Frame-Options "SAMEORIGIN" always;
   add_header X-Content-Type-Options "nosniff" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
 
   gzip on;
   gzip_vary on;
+  gzip_proxied any;
   gzip_min_length 1k;
-  gzip_comp_level 6;
-  gzip_types text/plain text/css text/xml application/json application/javascript application/rss+xml application/atom+xml image/svg+xml;
+  gzip_comp_level 5;
+  gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml application/rss+xml application/atom+xml image/svg+xml font/woff font/woff2;
 
   if (\$host != $domain) { return 301 \$scheme://$domain\$request_uri; }
 
-  location ~ .*\.(gif|jpg|jpeg|png|bmp|swf|flv|mp4|ico|webp|avif)$ {
+  location ~* \.(gif|jpg|jpeg|png|bmp|ico|webp|avif|svg)$ {
+    expires 1y;
+    access_log off;
+    add_header Cache-Control "public, immutable";
+  }
+
+  location ~* \.(js|css)$ {
+    expires 1y;
+    access_log off;
+    add_header Cache-Control "public, immutable";
+  }
+
+  location ~* \.(woff|woff2|ttf|otf|eot)$ {
+    expires 1y;
+    access_log off;
+    add_header Cache-Control "public, immutable";
+    add_header Access-Control-Allow-Origin "*";
+  }
+
+  location ~* \.(mp4|webm|ogg|mp3|wav|flv|swf)$ {
     expires 30d;
     access_log off;
+    add_header Cache-Control "public";
   }
 
-  location ~ .*\.(js|css)$ {
-    expires 7d;
-    access_log off;
-  }
-
-  location ~ /(\.user\.ini|\.ht|\.git|\.svn|\.env.*) {
+  location ~ /(\.user\.ini|\.ht|\.git|\.svn|\.env|\.DS_Store|Thumbs\.db) {
     deny all;
   }
 }
@@ -138,12 +162,12 @@ EOF
 
 reload_nginx() {
   if ! sudo nginx -t; then
-    echo "Nginx 配置测试失败"
+    echo "Error: Nginx configuration test failed"
     return 1
   fi
 
   if ! sudo systemctl reload nginx; then
-    echo "Nginx 重载失败"
+    echo "Error: Failed to reload Nginx"
     return 1
   fi
 
@@ -153,23 +177,23 @@ reload_nginx() {
 main() {
   check_dependencies
 
-  echo "请输入域名:"
+  echo "Enter domain name:"
   read -r domain
 
   if ! validate_domain "$domain"; then
     exit 1
   fi
 
-  echo "请粘贴 Cloudflare 证书内容:"
-  echo "（从 -----BEGIN CERTIFICATE----- 开始粘贴，粘贴完成后按 Ctrl+D）"
+  echo "Paste Cloudflare certificate content:"
+  echo "(Start from -----BEGIN CERTIFICATE-----, press Ctrl+D when done)"
   cert_content=$(cat)
 
   if ! validate_certificate "$cert_content"; then
     exit 1
   fi
 
-  echo "请粘贴 Cloudflare 私钥内容:"
-  echo "（从 -----BEGIN PRIVATE KEY----- 开始粘贴，粘贴完成后按 Ctrl+D）"
+  echo "Paste Cloudflare private key content:"
+  echo "(Start from -----BEGIN PRIVATE KEY-----, press Ctrl+D when done)"
   key_content=$(cat)
 
   local primary_domain
@@ -188,7 +212,7 @@ main() {
       is_subdomain=false
     fi
   else
-    echo "请输入有效的域名"
+    echo "Error: Please enter a valid domain name"
     exit 1
   fi
 
@@ -203,9 +227,9 @@ main() {
     exit 1
   fi
 
-  echo "配置完成！"
-  echo "网站目录: $WEBSITES_DIR/$full_domain"
-  echo "证书位置: $CERT_DIR/$full_domain"
+  echo "Configuration complete!"
+  echo "Website directory: $WEBSITES_DIR/$full_domain"
+  echo "Certificate location: $CERT_DIR/$full_domain"
 }
 
 main

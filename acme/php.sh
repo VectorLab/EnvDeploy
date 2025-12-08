@@ -1,7 +1,33 @@
 #!/bin/bash
 
-echo "请输入域名:"
-read domain
+set -euo pipefail
+
+check_dependencies() {
+  local missing=()
+
+  if ! command -v nginx >/dev/null 2>&1; then
+    missing+=("nginx")
+  fi
+
+  if [ ! -f ~/.acme.sh/acme.sh ]; then
+    missing+=("acme.sh")
+  fi
+
+  if ! command -v php >/dev/null 2>&1; then
+    missing+=("php")
+  fi
+
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo "Error: Missing dependencies: ${missing[*]}"
+    echo "Please run install.sh and install/php-mariadb.sh first"
+    exit 1
+  fi
+}
+
+check_dependencies
+
+echo "Enter domain name:"
+read -r domain
 
 if [[ $domain =~ \. ]]; then
   primary_domain=${domain#*.}
@@ -14,7 +40,7 @@ if [[ $domain =~ \. ]]; then
     is_subdomain=false
   fi
 else
-  echo "请输入有效的域名"
+  echo "Error: Please enter a valid domain name"
   exit 1
 fi
 
@@ -80,26 +106,33 @@ server {
   root /websites/$full_domain;
   index index.php index.html index.htm;
 
+  server_tokens off;
+
   ssl_certificate /etc/letsencrypt/live/$full_domain/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/$full_domain/privkey.pem;
   ssl_protocols TLSv1.3;
-  ssl_prefer_server_ciphers on;
-  ssl_session_timeout 10m;
+  ssl_prefer_server_ciphers off;
+  ssl_session_timeout 1d;
   ssl_session_cache shared:SSL:10m;
   ssl_session_tickets off;
-  ssl_buffer_size 2k;
+  ssl_buffer_size 4k;
   ssl_stapling on;
   ssl_stapling_verify on;
+  resolver 1.1.1.1 8.8.8.8 valid=300s;
+  resolver_timeout 5s;
 
-  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
   add_header X-Frame-Options "SAMEORIGIN" always;
   add_header X-Content-Type-Options "nosniff" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
 
   gzip on;
   gzip_vary on;
+  gzip_proxied any;
   gzip_min_length 1k;
-  gzip_comp_level 6;
-  gzip_types text/plain text/css text/xml application/json application/javascript application/rss+xml application/atom+xml image/svg+xml;
+  gzip_comp_level 5;
+  gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml application/rss+xml application/atom+xml image/svg+xml font/woff font/woff2;
 
   if (\$host != $full_domain) { return 301 \$scheme://$full_domain\$request_uri; }
 
@@ -117,19 +150,37 @@ server {
     include fastcgi_params;
     fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
     fastcgi_param PATH_INFO \$fastcgi_path_info;
+    fastcgi_buffers 16 16k;
+    fastcgi_buffer_size 32k;
+    fastcgi_read_timeout 300s;
   }
 
-  location ~ .*\.(gif|jpg|jpeg|png|bmp|swf|flv|mp4|ico|webp|avif)$ {
+  location ~* \.(gif|jpg|jpeg|png|bmp|ico|webp|avif|svg)$ {
+    expires 1y;
+    access_log off;
+    add_header Cache-Control "public, immutable";
+  }
+
+  location ~* \.(js|css)$ {
+    expires 1y;
+    access_log off;
+    add_header Cache-Control "public, immutable";
+  }
+
+  location ~* \.(woff|woff2|ttf|otf|eot)$ {
+    expires 1y;
+    access_log off;
+    add_header Cache-Control "public, immutable";
+    add_header Access-Control-Allow-Origin "*";
+  }
+
+  location ~* \.(mp4|webm|ogg|mp3|wav|flv|swf)$ {
     expires 30d;
     access_log off;
+    add_header Cache-Control "public";
   }
 
-  location ~ .*\.(js|css)$ {
-    expires 7d;
-    access_log off;
-  }
-
-  location ~ /(\.user\.ini|\.ht|\.git|\.svn|\.env.*) {
+  location ~ /(\.user\.ini|\.ht|\.git|\.svn|\.env|\.DS_Store|Thumbs\.db) {
     deny all;
   }
 }

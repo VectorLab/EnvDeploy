@@ -1,10 +1,45 @@
 #!/bin/bash
 
-echo "请输入域名:"
-read domain
+set -euo pipefail
 
-echo "请输入端口号:"
-read port
+check_dependencies() {
+  local missing=()
+
+  if ! command -v nginx >/dev/null 2>&1; then
+    missing+=("nginx")
+  fi
+
+  if [ ! -f ~/.acme.sh/acme.sh ]; then
+    missing+=("acme.sh")
+  fi
+
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo "Error: Missing dependencies: ${missing[*]}"
+    echo "Please run install.sh first"
+    exit 1
+  fi
+}
+
+validate_port() {
+  local port="$1"
+  if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1024 ] || [ "$port" -gt 65535 ]; then
+    echo "Error: Port must be a number between 1024-65535"
+    return 1
+  fi
+  return 0
+}
+
+check_dependencies
+
+echo "Enter domain name:"
+read -r domain
+
+echo "Enter port number (1024-65535):"
+read -r port
+
+if ! validate_port "$port"; then
+  exit 1
+fi
 
 if [[ $domain =~ \. ]]; then
   primary_domain=${domain#*.}
@@ -17,7 +52,7 @@ if [[ $domain =~ \. ]]; then
     is_subdomain=false
   fi
 else
-  echo "请输入有效的域名"
+  echo "Error: Please enter a valid domain name"
   exit 1
 fi
 
@@ -78,26 +113,33 @@ server {
 
   server_name $server_name_directive;
 
+  server_tokens off;
+
   ssl_certificate /etc/letsencrypt/live/$full_domain/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/$full_domain/privkey.pem;
   ssl_protocols TLSv1.3;
-  ssl_prefer_server_ciphers on;
-  ssl_session_timeout 10m;
+  ssl_prefer_server_ciphers off;
+  ssl_session_timeout 1d;
   ssl_session_cache shared:SSL:10m;
   ssl_session_tickets off;
-  ssl_buffer_size 2k;
+  ssl_buffer_size 4k;
   ssl_stapling on;
   ssl_stapling_verify on;
+  resolver 1.1.1.1 8.8.8.8 valid=300s;
+  resolver_timeout 5s;
 
-  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
   add_header X-Frame-Options "SAMEORIGIN" always;
   add_header X-Content-Type-Options "nosniff" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
 
   gzip on;
   gzip_vary on;
+  gzip_proxied any;
   gzip_min_length 1k;
-  gzip_comp_level 6;
-  gzip_types text/plain text/css text/xml application/json application/javascript application/rss+xml application/atom+xml image/svg+xml;
+  gzip_comp_level 5;
+  gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml application/rss+xml application/atom+xml image/svg+xml font/woff font/woff2;
 
   if (\$host != $full_domain) { return 301 \$scheme://$full_domain\$request_uri; }
 
@@ -112,8 +154,10 @@ server {
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_cache_bypass \$http_upgrade;
     proxy_buffering off;
+    proxy_request_buffering off;
     proxy_connect_timeout 60s;
     proxy_send_timeout 60s;
     proxy_read_timeout 60s;
@@ -128,16 +172,26 @@ server {
     add_header Cache-Control "public, max-age=31536000, immutable";
   }
 
-  location ~* \\.(ico|jpg|jpeg|png|gif|svg|webp|avif|woff|woff2|ttf|eot)$ {
+  location ~* \\.(ico|jpg|jpeg|png|gif|svg|webp|avif)$ {
     proxy_pass http://127.0.0.1:$port;
     proxy_http_version 1.1;
     proxy_set_header Host \$host;
-    expires 30d;
+    expires 1y;
     access_log off;
-    add_header Cache-Control "public, max-age=2592000";
+    add_header Cache-Control "public, max-age=31536000, immutable";
   }
 
-  location ~ /(\\.user\\.ini|\\.ht|\\.git|\\.svn|\\.env.*) {
+  location ~* \\.(woff|woff2|ttf|otf|eot)$ {
+    proxy_pass http://127.0.0.1:$port;
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    expires 1y;
+    access_log off;
+    add_header Cache-Control "public, max-age=31536000, immutable";
+    add_header Access-Control-Allow-Origin "*";
+  }
+
+  location ~ /(\\.user\\.ini|\\.ht|\\.git|\\.svn|\\.env|\\.DS_Store) {
     deny all;
   }
 }

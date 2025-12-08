@@ -2,35 +2,40 @@
 
 set -euo pipefail
 
-echo "=== PHP + MariaDB 安装脚本 ==="
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: Please run this script as root"
+  exit 1
+fi
+
+echo "=== PHP + MariaDB Installation Script ==="
 echo ""
 
-read -s -p "请输入 MariaDB root 密码: " MARIADB_ROOT_PASSWORD
+read -s -p "Enter MariaDB root password: " MARIADB_ROOT_PASSWORD
 echo ""
 
 if [ -z "$MARIADB_ROOT_PASSWORD" ]; then
-  echo "错误: 密码不能为空"
+  echo "Error: Password cannot be empty"
   exit 1
 fi
 
 echo ""
-echo "正在安装 PHP..."
-sudo apt update
-sudo apt install -y php php-fpm php-mysql php-mbstring php-xml php-curl php-zip php-gd
+echo "Installing PHP..."
+apt update
+apt install -y php php-fpm php-mysql php-mbstring php-xml php-curl php-zip php-gd
 
 PHP_VERSION=$(php -r 'echo PHP_VERSION;' | grep -oP "^\d+\.\d+")
 PHP_FPM_SERVICE="php${PHP_VERSION}-fpm"
 
-sudo systemctl enable ${PHP_FPM_SERVICE}
-sudo systemctl start ${PHP_FPM_SERVICE}
+systemctl enable "${PHP_FPM_SERVICE}"
+systemctl start "${PHP_FPM_SERVICE}"
 
-echo "PHP ${PHP_VERSION} 安装完成"
+echo "PHP ${PHP_VERSION} installed successfully"
 echo ""
 
-echo "正在安装 MariaDB..."
-sudo apt install -y mariadb-server
+echo "Installing MariaDB..."
+apt install -y mariadb-server
 
-sudo mysql -u root <<-EOF
+mysql -u root <<-EOF
 SET PASSWORD FOR 'root'@'localhost' = PASSWORD('$MARIADB_ROOT_PASSWORD');
 DELETE FROM mysql.user WHERE User='';
 DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
@@ -39,16 +44,16 @@ DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
 FLUSH PRIVILEGES;
 EOF
 
-sudo systemctl enable mariadb
-sudo systemctl restart mariadb
+systemctl enable mariadb
+systemctl restart mariadb
 
 echo ""
-echo "=== 安装完成 ==="
-echo "PHP 版本: ${PHP_VERSION}"
-echo "PHP-FPM 服务: ${PHP_FPM_SERVICE}"
-echo "MariaDB root 密码已设置"
+echo "=== Installation Complete ==="
+echo "PHP version: ${PHP_VERSION}"
+echo "PHP-FPM service: ${PHP_FPM_SERVICE}"
+echo "MariaDB root password configured"
 echo ""
-echo "创建数据库和用户示例:"
+echo "Example: Create database and user:"
 echo "  mysql -u root -p"
 echo "  CREATE DATABASE mydb;"
 echo "  CREATE USER 'myuser'@'localhost' IDENTIFIED BY 'mypassword';"
