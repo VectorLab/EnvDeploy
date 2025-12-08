@@ -46,6 +46,7 @@ fi
 
 sudo mkdir -p /websites/$full_domain
 sudo mkdir -p /etc/letsencrypt/live/$full_domain
+sudo mkdir -p /etc/nginx/sites-available
 
 if [ "$is_subdomain" = true ]; then
   server_name_directive=$full_domain

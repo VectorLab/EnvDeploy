@@ -50,7 +50,7 @@ validate_certificate() {
 
 create_directories() {
   local domain="$1"
-  local dirs=("$WEBSITES_DIR/$domain" "$CERT_DIR/$domain")
+  local dirs=("$WEBSITES_DIR/$domain" "$CERT_DIR/$domain" "$NGINX_AVAILABLE" "$NGINX_CONFD")
 
   for dir in "${dirs[@]}"; do
     if ! sudo mkdir -p "$dir"; then
