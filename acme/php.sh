@@ -46,7 +46,7 @@ fi
 
 sudo mkdir -p /websites/$full_domain
 sudo mkdir -p /etc/letsencrypt/live/$full_domain
-sudo mkdir -p /etc/nginx/sites-available
+sudo mkdir -p /etc/nginx/conf.d
 
 if [ "$is_subdomain" = true ]; then
   server_name_directive=$full_domain
@@ -54,7 +54,7 @@ else
   server_name_directive="$domain www.$domain"
 fi
 
-cat <<EOF | sudo tee /etc/nginx/sites-available/$full_domain.conf
+cat <<EOF | sudo tee /etc/nginx/conf.d/$full_domain.conf
 server {
   listen 80;
   listen [::]:80;
@@ -69,8 +69,6 @@ server {
   }
 }
 EOF
-
-sudo ln -sf /etc/nginx/sites-available/$full_domain.conf /etc/nginx/conf.d/
 sudo nginx -t
 sudo systemctl reload nginx
 
@@ -90,7 +88,7 @@ fi
 PHP_VERSION=$(php -r 'echo PHP_VERSION;' | grep --only-matching --perl-regexp "^\\d+\\.\\d+")
 PHP_FPM_SOCK="unix:/var/run/php/php${PHP_VERSION}-fpm.sock"
 
-cat <<EOF | sudo tee /etc/nginx/sites-available/$full_domain.conf
+cat <<EOF | sudo tee /etc/nginx/conf.d/$full_domain.conf
 server {
   listen 80;
   listen [::]:80;

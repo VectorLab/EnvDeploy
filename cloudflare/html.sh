@@ -2,7 +2,6 @@
 
 set -euo pipefail
 
-readonly NGINX_AVAILABLE="/etc/nginx/sites-available"
 readonly NGINX_CONFD="/etc/nginx/conf.d"
 readonly WEBSITES_DIR="/websites"
 readonly CERT_DIR="/cloudflare"
@@ -50,7 +49,7 @@ validate_certificate() {
 
 create_directories() {
   local domain="$1"
-  local dirs=("$WEBSITES_DIR/$domain" "$CERT_DIR/$domain" "$NGINX_AVAILABLE" "$NGINX_CONFD")
+  local dirs=("$WEBSITES_DIR/$domain" "$CERT_DIR/$domain" "$NGINX_CONFD")
 
   for dir in "${dirs[@]}"; do
     if ! sudo mkdir -p "$dir"; then
@@ -83,7 +82,7 @@ generate_nginx_config() {
     server_name_directive="$domain www.$domain"
   fi
 
-  cat <<EOF | sudo tee "$NGINX_AVAILABLE/$domain.conf" > /dev/null
+  cat <<EOF | sudo tee "$NGINX_CONFD/$domain.conf" > /dev/null
 server {
   listen 80;
   listen [::]:80;
@@ -156,8 +155,6 @@ server {
   }
 }
 EOF
-
-  sudo ln -sf "$NGINX_AVAILABLE/$domain.conf" "$NGINX_CONFD/"
 }
 
 reload_nginx() {

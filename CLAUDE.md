@@ -38,18 +38,16 @@ EnvDeploy/
 All site scripts follow the same pattern:
 1. Prompt for domain (and port for Node.js)
 2. Create `/websites/{domain}/` directory
-3. Generate nginx config at `/etc/nginx/sites-available/{domain}.conf`
-4. Symlink to `/etc/nginx/conf.d/`
-5. Issue/install SSL certificate
-6. Reload nginx
+3. Generate nginx config at `/etc/nginx/conf.d/{domain}.conf`
+4. Issue/install SSL certificate
+5. Reload nginx
 
 ## Key Paths on Deployed Servers
 
 | Path | Purpose |
 |------|---------|
 | `/websites/{domain}/` | Site root directories |
-| `/etc/nginx/sites-available/` | Nginx config files |
-| `/etc/nginx/conf.d/` | Symlinks to active configs |
+| `/etc/nginx/conf.d/` | Nginx config files |
 | `/etc/letsencrypt/live/{domain}/` | Let's Encrypt certificates |
 | `/cloudflare/{domain}/` | Cloudflare Origin certificates |
 

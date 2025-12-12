@@ -42,7 +42,7 @@ fi
 
 sudo mkdir -p /websites/$full_domain
 sudo mkdir -p /etc/letsencrypt/live/$full_domain
-sudo mkdir -p /etc/nginx/sites-available
+sudo mkdir -p /etc/nginx/conf.d
 
 if [ "$is_subdomain" = true ]; then
   server_name_directive=$full_domain
@@ -50,7 +50,7 @@ else
   server_name_directive="$domain www.$domain"
 fi
 
-cat <<EOF | sudo tee /etc/nginx/sites-available/$full_domain.conf
+cat <<EOF | sudo tee /etc/nginx/conf.d/$full_domain.conf
 server {
   listen 80;
   listen [::]:80;
@@ -65,8 +65,6 @@ server {
   }
 }
 EOF
-
-sudo ln -sf /etc/nginx/sites-available/$full_domain.conf /etc/nginx/conf.d/
 sudo nginx -t
 sudo systemctl reload nginx
 
@@ -83,7 +81,7 @@ fi
     --fullchain-file /etc/letsencrypt/live/$full_domain/fullchain.pem \
     --reloadcmd     "sudo systemctl reload nginx"
 
-cat <<EOF | sudo tee /etc/nginx/sites-available/$full_domain.conf
+cat <<EOF | sudo tee /etc/nginx/conf.d/$full_domain.conf
 server {
   listen 80;
   listen [::]:80;
