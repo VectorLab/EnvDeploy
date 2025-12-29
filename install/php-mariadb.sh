@@ -25,11 +25,17 @@ apt install -y php php-fpm php-mysql php-mbstring php-xml php-curl php-zip php-g
 
 PHP_VERSION=$(php -r 'echo PHP_VERSION;' | grep -oP "^\d+\.\d+")
 PHP_FPM_SERVICE="php${PHP_VERSION}-fpm"
+PHP_FPM_POOL="/etc/php/${PHP_VERSION}/fpm/pool.d/www.conf"
+
+sed -i 's/^user = www-data/user = nginx/' "$PHP_FPM_POOL"
+sed -i 's/^group = www-data/group = nginx/' "$PHP_FPM_POOL"
+sed -i 's/^listen.owner = www-data/listen.owner = nginx/' "$PHP_FPM_POOL"
+sed -i 's/^listen.group = www-data/listen.group = nginx/' "$PHP_FPM_POOL"
 
 systemctl enable "${PHP_FPM_SERVICE}"
 systemctl start "${PHP_FPM_SERVICE}"
 
-echo "PHP ${PHP_VERSION} installed successfully"
+echo "PHP ${PHP_VERSION} installed successfully (configured for nginx user)"
 echo ""
 
 echo "Installing MariaDB..."

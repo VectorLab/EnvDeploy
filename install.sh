@@ -16,7 +16,7 @@ rm -f /usr/share/keyrings/nginx-archive-keyring.gpg
 rm -f /etc/apt/preferences.d/99nginx
 
 apt update -y
-apt install -y unzip wget curl gnupg screen git rsync build-essential python3 cron lsb-release
+apt install -y unzip wget curl gnupg screen git rsync build-essential python3 cron lsb-release sqlite3
 
 ENV_SYS_DISTID=$(lsb_release -is | tail -n 1)
 ENV_SYS_CODENAME=$(lsb_release -cs | tail -n 1)
@@ -65,4 +65,4 @@ curl https://get.acme.sh | sh -s email=admin@example.com --force
 
 echo ""
 echo "Installation complete!"
-echo "Installed: git, screen, rsync, nginx, bun, node (LTS), npm, pnpm, pm2, acme.sh, build-essential, python3"
+echo "Installed: git, screen, rsync, nginx, bun, node (LTS), npm, pnpm, pm2, acme.sh, build-essential, python3, sqlite3"
